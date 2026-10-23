@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MĀ Asset Library</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{--bg:#f6f1e9;--ink:#2b2520;--muted:#7a6f66;--card:#fff;--accent:#b8743f;--line:#e6ddd2}
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1c1917;--ink:#efe8df;--muted:#a39888;--card:#272220;--accent:#d9995f;--line:#3a332e}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  header h1{font-size:18px;margin:0 12px 0 0;font-weight:600;letter-spacing:.02em}
+  input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+  input{flex:1;min-width:180px}
+  .count{color:var(--muted);font-size:13px;white-space:nowrap}
+  .sets{padding:10px 16px 0;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  main{padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;position:relative}
+  .card img,.card video{display:block;width:100%;aspect-ratio:1;object-fit:cover;background:#ddd}
+  .card .meta{padding:6px 8px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .tag{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 6px;border-radius:6px}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:.2s;pointer-events:none}
+  .toast.show{opacity:1}
+  dialog{border:0;border-radius:12px;padding:0;max-width:min(96vw,1100px);background:var(--card);color:var(--ink)}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  dialog img,dialog video{max-width:96vw;max-height:78vh;display:block;margin:0 auto}
+  dialog .bar{display:flex;gap:10px;align-items:center;padding:10px 14px;font-size:13px;flex-wrap:wrap}
+  dialog code{font-size:12px;flex:1;min-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+</style>
+</head>
+<body>
+<header>
+  <h1>MĀ Asset Library</h1>
+  <input id="q" type="search" placeholder="Search filename, set, orientation (e.g. headshot portrait)">
+  <select id="orient"><option value="">Any orientation</option><option>portrait</option><option>landscape</option></select>
+  <span class="count" id="count">1459 assets</span>
+</header>
+<div class="sets" id="sets"></div>
+<main id="grid"></main>
+<div class="toast" id="toast">Copied</div>
+<dialog id="dlg"></dialog>
+<script>
+let DATA=[], group='', q='', orient='';
+const $=s=>document.querySelector(s);
+fetch('assets.json').then(r=>r.json()).then(j=>{DATA=j.assets;buildChips();render();});
+function buildChips(){
+  const groups=[...new Set(DATA.map(d=>d.group))];
+  const box=$('#sets'); box.innerHTML='';
+  const all=chip('All',''); box.appendChild(all);
+  groups.forEach(g=>box.appendChild(chip(g,g)));
+}
+function chip(label,val){const b=document.createElement('button');b.className='chip'+(val===group?' on':'');b.textContent=label;b.onclick=()=>{group=val;[...document.querySelectorAll('.chip')].forEach(c=>c.classList.toggle('on',c.textContent===(val||'All')));render();};return b;}
+$('#q').oninput=e=>{q=e.target.value.toLowerCase();render();};
+$('#orient').onchange=e=>{orient=e.target.value;render();};
+function render(){
+  const terms=q.split(/\s+/).filter(Boolean);
+  const rows=DATA.filter(d=>(!group||d.group===group)&&(!orient||d.orientation===orient)&&terms.every(t=>(d.path+' '+d.group+' '+(d.orientation||'')).toLowerCase().includes(t)));
+  $('#count').textContent=rows.length+' of '+DATA.length;
+  const g=$('#grid'); g.innerHTML='';
+  const frag=document.createDocumentFragment();
+  rows.slice(0,600).forEach(d=>{
+    const c=document.createElement('div');c.className='card';
+    const isVid=d.path.endsWith('.mp4');
+    c.innerHTML=(isVid?`<video src="${d.url}" muted preload="metadata"></video>`:`<img loading="lazy" src="${d.thumb_url||d.url}" alt="">`)
+      +`<span class="tag">${d.w?d.w+'×'+d.h:''}${d.duration?' · '+d.duration+'s':''}</span><div class="meta" title="${d.path}">${d.path.split('/').pop()}</div>`;
+    c.onclick=()=>open(d);
+    frag.appendChild(c);
+  });
+  g.appendChild(frag);
+}
+function open(d){
+  const dlg=$('#dlg'); const isVid=d.path.endsWith('.mp4');
+  dlg.innerHTML=(isVid?`<video src="${d.url}" controls autoplay muted></video>`:`<img src="${d.url}" alt="">`)
+    +`<div class="bar"><code>${d.url}</code><button class="primary" id="cp">Copy URL</button><a href="${d.url}" target="_blank"><button>Open</button></a><button id="x">Close</button></div>
+     <div class="bar" style="padding-top:0;color:var(--muted)">${d.set} · ${d.w||''}×${d.h||''} · ${(d.bytes/1024|0)} KB${d.orig?' · source: '+d.orig:''}</div>`;
+  dlg.querySelector('#cp').onclick=()=>copy(d.url);
+  dlg.querySelector('#x').onclick=()=>dlg.close();
+  dlg.onclick=e=>{if(e.target===dlg)dlg.close();};
+  dlg.showModal();
+}
+function copy(t){navigator.clipboard.writeText(t).then(()=>{const s=$('#toast');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),1200);});}
+</script>
+</body>
+</html>
